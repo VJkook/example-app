@@ -23,9 +23,6 @@ class PostsController extends Controller
         return response()->json($posts);
     }
 
-//Реализуй сначала все GET-запросы (читать все посты и один пост).
-
-    // Альтернативная реализация с поиском вручную
     public function show($id)
     {
         $post = Post::find($id);
@@ -37,9 +34,74 @@ class PostsController extends Controller
         return response()->json($post);
     }
 
+    public function store(Request $request)
+    {
+        try {
+            // 1. ВАЛИДАЦИЯ данных
+            $validatedData = $request->validate([
+                'name' => 'required|string|max:255',
+                'description' => 'nullable|string',
+
+            ]);
+
+            // 2. СОЗДАНИЕ поста
+            $post = Post::create($validatedData);
+
+
+            return response()->json([
+                'message' => 'Post created successfully',
+                'data' => $post
+            ], 201); // 201 - Created
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            // Обработка ошибок валидации
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 422); // 422 - Unprocessable Entity
+
+        } catch (\Exception $e) {
+            // Обработка всех остальных ошибок
+            return response()->json([
+                'message' => 'Server error',
+                'error' => $e->getMessage()
+            ], 500); // 500 - Internal Server Error
+        }
+    }
+
+
+    // POST /api/posts/{id} - обновить пост
+    public function update(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'name' => 'sometimes|string|max:255',
+            'description' => 'nullable|string',
+
+        ]);
+
+        $post = Post::find($id);
+
+        if (!$post) {
+            return response()->json([
+                'error' => 'Post not found',
+                'requested_id' => $id,
+                'available_posts' => Post::pluck('id')->toArray()
+            ], 404);
+        }
+
+        // обновляем только переданные поля
+        $post->update($validated);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Post updated successfully',
+            'updated_post' => $post
+        ], 200);
+    }
 
 //
 //Потом реализуй POST (создание).
+
 //
 //Затем DELETE (удаление).
 
