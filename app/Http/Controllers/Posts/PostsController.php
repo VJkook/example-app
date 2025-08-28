@@ -3,8 +3,9 @@
 namespace App\Http\Controllers\Posts;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Foundation\Auth\EmailVerificationRequest;
-use Illuminate\Http\RedirectResponse;
+use App\Models\Post;
+use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 
 class PostsController extends Controller
 {
@@ -13,18 +14,33 @@ class PostsController extends Controller
      */
     public function index()
     {
-        $response = ['msg' => 'ok'];
-        return response()->json($response);
+//        $response = ['msg' => 'ok'];
+//        return response()->json($response);
+        // 1. Идем в базу через модель Post и берем ВСЕ записи
+        $posts = Post::all();
+
+        // 2. Автоматически преобразуем коллекцию постов в JSON и возвращаем
+        return response()->json($posts);
     }
 
-    public function __invoke(EmailVerificationRequest $request): RedirectResponse
+//Реализуй сначала все GET-запросы (читать все посты и один пост).
+
+    // Альтернативная реализация с поиском вручную
+    public function show($id)
     {
-        if ($request->user()->hasVerifiedEmail()) {
-            return redirect()->intended(route('dashboard', absolute: false) . '?verified=1');
+        $post = Post::find($id);
+
+        if (!$post) {
+            return response()->json(['error' => 'Post not found'], 404);
         }
 
-        $request->fulfill();
-
-        return redirect()->intended(route('dashboard', absolute: false) . '?verified=1');
+        return response()->json($post);
     }
+
+
+//
+//Потом реализуй POST (создание).
+//
+//Затем DELETE (удаление).
+
 }
