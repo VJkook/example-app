@@ -4,105 +4,103 @@ namespace App\Http\Controllers\Posts;
 
 use App\Http\Controllers\Controller;
 use App\Models\Post;
+use App\Models\Responses\ErrorResponse;
+use App\Models\Responses\PostResponse;
+use App\Models\Responses\StatusResponse;
+use App\Services\PostsService;
+use Exception;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Validator;
 
 class PostsController extends Controller
 {
+    public function __construct(protected PostsService $service)
+    {
+    }
+
     /**
      * Mark the authenticated user's email address as verified.
      */
-    public function index()
+    public function index(): JsonResponse
     {
-//        $response = ['msg' => 'ok'];
-//        return response()->json($response);
-        // 1. Идем в базу через модель Post и берем ВСЕ записи
-        $posts = Post::all();
-
-        // 2. Автоматически преобразуем коллекцию постов в JSON и возвращаем
+        $posts = $this->service->getAllPosts();
         return response()->json($posts);
     }
 
-    public function show($id)
+    public function show(int $id): ?JsonResponse
     {
-        $post = Post::find($id);
-
+        $post = $this->service->getPostById($id);
         if (!$post) {
-            return response()->json(['error' => 'Post not found'], 404);
+            return response()->json(new ErrorResponse('Post not found'), 404);
         }
-
         return response()->json($post);
     }
 
-    public function store(Request $request)
+    public function store(Request $request): JsonResponse
     {
         try {
-            // 1. ВАЛИДАЦИЯ данных
-            $validatedData = $request->validate([
+            $validatedData = Validator::make($request->all(), [
                 'name' => 'required|string|max:255',
                 'description' => 'nullable|string',
 
             ]);
 
-            // 2. СОЗДАНИЕ поста
-            $post = Post::create($validatedData);
+            if ($validatedData->fails()) {
+                return response()->json($validatedData->errors()->getMessages(), 400);
+            }
 
+            $post = $this->service->createPost($request->get('name'), $request->get('description'));
 
-            return response()->json([
-                'message' => 'Post created successfully',
-                'data' => $post
-            ], 201); // 201 - Created
+            $response = new PostResponse(
+                $post->getId(),
+                $post->getName(),
+                $post->getCreatedAt(),
+                $post->getUpdatedAt(),
+                $post->getDescription()
+            );
 
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            // Обработка ошибок валидации
-            return response()->json([
-                'message' => 'Validation failed',
-                'errors' => $e->errors()
-            ], 422); // 422 - Unprocessable Entity
+            return response()->json($response, 201); // 201 - Created
 
-        } catch (\Exception $e) {
-            // Обработка всех остальных ошибок
-            return response()->json([
-                'message' => 'Server error',
-                'error' => $e->getMessage()
-            ], 500); // 500 - Internal Server Error
+        } catch (Exception $e) {
+            return response()->json((new ErrorResponse($e->getMessage())), 500); // 500 - Internal Server Error
         }
     }
 
-
-    // POST /api/posts/{id} - обновить пост
-    public function update(Request $request, $id)
+    public function update(Request $request, $id): JsonResponse
     {
-        $validated = $request->validate([
-            'name' => 'sometimes|string|max:255',
+        $validatedData = Validator::make($request->all(), [
+            'name' => 'required|string|max:255',
             'description' => 'nullable|string',
 
         ]);
-
-        $post = Post::find($id);
-
-        if (!$post) {
-            return response()->json([
-                'error' => 'Post not found',
-                'requested_id' => $id,
-                'available_posts' => Post::pluck('id')->toArray()
-            ], 404);
+        if ($validatedData->fails()) {
+            return response()->json($validatedData->errors()->getMessages(), 400);
+        }
+        $attributes = [];
+        if (!is_null($request->name)) {
+            $attributes['name'] = $request->name;
+        }
+        if (!is_null($request->description)) {
+            $attributes['description'] = $request->description;
+        }
+        if (empty($attributes)) {
+            $post = $this->service->getPostById($id);
+            return response()->json($post);
         }
 
-        // обновляем только переданные поля
-        $post->update($validated);
+        $post = $this->service->updatePost($id, $attributes);
+        return response()->json($post);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Post updated successfully',
-            'updated_post' => $post
-        ], 200);
     }
 
-//
-//Потом реализуй POST (создание).
-
-//
-//Затем DELETE (удаление).
+    public function destroy(int $id): JsonResponse
+    {
+        $status=$this->service->deletePost($id);
+        if(!$status){
+            return response()->json(new ErrorResponse('Post not found'), 404);
+        }
+        return response()->json(new StatusResponse("Post has been deleted"), 204);
+    }
 
 }
